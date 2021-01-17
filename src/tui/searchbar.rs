@@ -56,7 +56,9 @@ impl SearchBuffer {
         let (width, _) = terminal::size()?;
         output
             .queue(cursor::MoveTo(0, 0))?
-            .queue(style::Print("-".repeat(width.into())))?;
+            .queue(style::Print("o"))?
+            .queue(style::Print("-".repeat(width.saturating_sub(2).into())))?
+            .queue(style::Print("o"))?;
         output
             .queue(cursor::MoveTo(0, 1))?
             .queue(cursor::MoveTo(0, 1))?
@@ -69,7 +71,9 @@ impl SearchBuffer {
             .queue(style::Print(" |"))?;
         output
             .queue(cursor::MoveTo(0, 2))?
-            .queue(style::Print("-".repeat(width.into())))?;
+            .queue(style::Print("o"))?
+            .queue(style::Print("-".repeat(width.saturating_sub(2).into())))?
+            .queue(style::Print("o"))?;
         output.flush()?;
         output.queue(cursor::RestorePosition)?;
         output.queue(cursor::MoveRight(self.cursor_position as u16))?;

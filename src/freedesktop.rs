@@ -4,7 +4,8 @@ use std::io::{self, BufRead, BufReader};
 use std::iter;
 use std::mem;
 
-use crate::model::{Config, EntryPlugin, ListEntry, RunFlags};
+use crate::config::Config;
+use crate::model::{EntryPlugin, ListEntry, RunFlags};
 use crate::utils::{filter_log, EitherOps};
 
 mod parsing;
@@ -19,7 +20,7 @@ pub struct FreedesktopPlugin {
 impl FreedesktopPlugin {
     pub fn new() -> Self {
         Self {
-            inner : Box::new(None.into_iter())
+            inner: Box::new(None.into_iter()),
         }
     }
 }

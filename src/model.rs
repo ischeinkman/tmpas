@@ -1,36 +1,6 @@
-use nix::unistd::{execvp, fork, ForkResult};
+use crate::config::Config;
 
-use std::ffi::CString;
 use std::path::Path;
-
-pub struct Config {
-    pub list_size: usize,
-    pub terminal_runner: String,
-    pub language: Option<String>,
-}
-
-impl Config {
-    pub fn make_terminal_command(&self, entry: &ListEntry) -> String {
-        let binary = entry.exec_name().unwrap();
-        let flags = entry
-            .exec_command
-            .iter()
-            .skip(1)
-            .fold(String::new(), |acc, cur| format!("{} {}", acc, cur));
-        let command = format!("{} {}", binary, flags);
-        let subs = [
-            ("$DISPLAY_NAME", entry.name()),
-            ("$BINARY", binary),
-            ("$FLAGS", &flags),
-            ("$COMMAND", &command),
-        ];
-        let mut raw = self.terminal_runner.clone();
-        for (k, v) in &subs {
-            raw = raw.replace(k, v);
-        }
-        raw
-    }
-}
 
 pub trait EntryPlugin {
     fn name(&self) -> String;
@@ -69,46 +39,6 @@ impl ListEntry {
                 .map(|child| child.expanded_length(level - 1))
                 .sum(),
         }
-    }
-    #[allow(dead_code)]
-    pub fn run(&self, config: &Config) {
-        let binary: &str = match self.exec_name() {
-            Some(n) => n,
-            None => {
-                return;
-            }
-        };
-        let (fname, argv) = if self.exec_flags.is_term() {
-            let raw = config.make_terminal_command(&self);
-            let argv: Vec<_> = raw
-                .split(' ')
-                .map(|part| CString::new(part).unwrap())
-                .collect();
-            let fname = argv.first().cloned().unwrap();
-            (fname, argv)
-        } else {
-            let binary = CString::new(binary).unwrap();
-            let argv: Vec<_> = self
-                .exec_command
-                .iter()
-                .cloned()
-                .map(|part| CString::new(part).unwrap())
-                .collect();
-            (binary, argv)
-        };
-        if self.exec_flags.should_fork() {
-            let fork_res = unsafe { fork() };
-            match fork_res {
-                Ok(ForkResult::Parent { .. }) => {
-                    return;
-                }
-                Ok(ForkResult::Child) => {}
-                Err(e) => {
-                    panic!("Failed to fork: {:?}", e);
-                }
-            }
-        }
-        execvp(&fname, &argv).unwrap();
     }
 }
 

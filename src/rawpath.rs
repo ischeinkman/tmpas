@@ -7,11 +7,9 @@ use std::path::{Path, PathBuf};
 
 use nix::unistd::{access, AccessFlags};
 
-use crate::model::{Config, EntryPlugin, ListEntry};
-use crate::{
-    model::RunFlags,
-    utils::{filter_log, EitherOps},
-};
+use crate::config::Config;
+use crate::model::{EntryPlugin, ListEntry, RunFlags};
+use crate::utils::{filter_log, EitherOps};
 
 pub struct RawPathPlugin {
     inner: Box<dyn Iterator<Item = ListEntry>>,
@@ -20,7 +18,7 @@ pub struct RawPathPlugin {
 impl RawPathPlugin {
     pub fn new() -> Self {
         Self {
-            inner : Box::new(None.into_iter())
+            inner: Box::new(None.into_iter()),
         }
     }
 }
@@ -48,7 +46,7 @@ fn make_entry(raw_path: impl AsRef<Path>) -> ListEntry {
         Cow::Owned(s) => s,
     };
     ListEntry {
-        display_name: None, 
+        display_name: None,
         exec_command: vec![path_str],
         exec_flags: RunFlags::new(),
         search_terms: Vec::new(),

@@ -1,6 +1,10 @@
-use crate::model::{Config, EntryPlugin, ListEntry, };
+use crate::model::{ EntryPlugin, ListEntry, };
+use crate::config::Config;
+
 
 use std::collections::HashMap;
+use std::ffi::CString;
+use nix::unistd::{ForkResult, fork, execvp};
 
 pub struct State {
     pub config: Config,
@@ -89,5 +93,45 @@ impl State {
                 .insert(ent.exec_name().unwrap().to_owned(), ent);
         }
         Some(())
+    }
+    #[allow(dead_code)]
+    pub fn run(&self, ent : &ListEntry) {
+        let binary: &str = match ent.exec_name() {
+            Some(n) => n,
+            None => {
+                return;
+            }
+        };
+        let (fname, argv) = if ent.exec_flags.is_term() {
+            let raw = self.config.make_terminal_command(&ent);
+            let argv: Vec<_> = raw
+                .split(' ')
+                .map(|part| CString::new(part).unwrap())
+                .collect();
+            let fname = argv.first().cloned().unwrap();
+            (fname, argv)
+        } else {
+            let binary = CString::new(binary).unwrap();
+            let argv: Vec<_> = ent
+                .exec_command
+                .iter()
+                .cloned()
+                .map(|part| CString::new(part).unwrap())
+                .collect();
+            (binary, argv)
+        };
+        if ent.exec_flags.should_fork() {
+            let fork_res = unsafe { fork() };
+            match fork_res {
+                Ok(ForkResult::Parent { .. }) => {
+                    return;
+                }
+                Ok(ForkResult::Child) => {}
+                Err(e) => {
+                    panic!("Failed to fork: {:?}", e);
+                }
+            }
+        }
+        execvp(&fname, &argv).unwrap();
     }
 }

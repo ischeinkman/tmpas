@@ -7,10 +7,13 @@ use rawpath::RawPathPlugin;
 mod utils;
 
 mod model;
-use model::{Config, ListEntry};
+use model::{ ListEntry};
 
 mod state;
 use state::State;
+
+mod config;
+use config::Config;
 
 mod tui;
 
@@ -39,7 +42,7 @@ fn main() {
             }
             Ok(Some(UiMessage::RunEntry(ent))) => {
                 drop(ui);
-                ent.run(&state.config);
+                state.run(&ent);
                 return;
             }
             Ok(Some(UiMessage::Quit)) => {

@@ -45,16 +45,16 @@ impl EntryPlugin for FreedesktopPlugin {
     }
 }
 
-fn section_to_entry(section: Section, language: Option<&str>) -> Result<ListEntry, ()> {
+fn section_to_entry(section: Section, language: Option<&str>) -> Result<ListEntry, String> {
     let display_name = section
         .name(language.as_deref())
         .or_else(|| section.name(None))
-        .ok_or(())?
+        .ok_or_else(|| format!("No display name for section: {:?}", section))?
         .to_owned();
     let exec_flags = RunFlags::new().with_term(section.is_term());
     let exec_command: Vec<_> = section
         .get_cmd()
-        .ok_or(())?
+        .ok_or_else(|| format!("No cmd for section: {:?}", section))?
         .split(' ')
         .map(|s| s.to_owned())
         .collect();

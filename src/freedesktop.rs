@@ -3,17 +3,77 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::iter;
 use std::mem;
-use std::path::{Path};
-use std::borrow::Cow;
 
-use crate::utils::EitherOps;
+use crate::model::{Config, EntryPlugin, ListEntry, RunFlags};
+use crate::utils::{filter_log, EitherOps};
 
 mod parsing;
 mod searching;
 
 use parsing::SectionReader;
 
-pub fn get_sections() -> impl Iterator<Item = io::Result<Section>> {
+pub struct FreedesktopPlugin {
+    inner: Box<dyn Iterator<Item = ListEntry>>,
+}
+
+impl FreedesktopPlugin {
+    pub fn new() -> Self {
+        Self {
+            inner : Box::new(None.into_iter())
+        }
+    }
+}
+
+impl EntryPlugin for FreedesktopPlugin {
+    fn name(&self) -> String {
+        "FreeDesktop".to_owned()
+    }
+    fn start(&mut self, config: &Config) {
+        let language = config.language.clone();
+        let iter = get_sections()
+            .filter_map(filter_log(|e| {
+                eprintln!("ERROR from xdg: {:?}", e);
+            }))
+            .map(move |section| section_to_entry(section, language.as_deref()))
+            .filter_map(filter_log(|e| {
+                eprintln!("ERROR from xdg: {:?}", e);
+            }));
+        self.inner = Box::new(iter);
+    }
+    fn next(&mut self) -> Option<ListEntry> {
+        self.inner.next()
+    }
+}
+
+fn section_to_entry(section: Section, language: Option<&str>) -> Result<ListEntry, ()> {
+    let display_name = section
+        .name(language.as_deref())
+        .or_else(|| section.name(None))
+        .ok_or(())?
+        .to_owned();
+    let exec_flags = RunFlags::new().with_term(section.is_term());
+    let exec_command: Vec<_> = section
+        .get_cmd()
+        .ok_or(())?
+        .split(' ')
+        .map(|s| s.to_owned())
+        .collect();
+    let search_terms = vec![
+        display_name.clone(),
+        exec_command.first().unwrap().to_owned(),
+    ];
+    let children = Vec::new();
+    let res = ListEntry {
+        display_name: Some(display_name),
+        exec_command,
+        exec_flags,
+        search_terms,
+        children,
+    };
+    Ok(res)
+}
+
+fn get_sections() -> impl Iterator<Item = io::Result<Section>> {
     searching::xdg_desktop_files().flat_map(|path_res| {
         let file_res = path_res.and_then(File::open).map(BufReader::new);
         let file = match file_res {
@@ -74,23 +134,9 @@ impl Section {
         }
         let mut exec = self.get_field("Exec")?;
         if let Some((idx, '%')) = exec.char_indices().nth_back(1) {
-            exec = &exec[..idx -1];
+            exec = &exec[..idx - 1];
         }
         Some(exec.to_owned())
-    }
-
-    pub fn exec_name(&self) -> Option<String> {
-        let mut cmd_path = self.get_cmd()?;
-        if let Some(first_space) = cmd_path.find(' ') {
-            cmd_path.truncate(first_space);
-        }
-        let pt = Path::new(&cmd_path);
-        let res = pt.file_name()?.to_string_lossy();
-        let res = match res {
-            Cow::Borrowed(s) => s.to_owned(), 
-            Cow::Owned(s) => s
-        };
-        Some(res)
     }
 
     pub fn name<'a>(&self, lang: Option<&'a str>) -> Option<&str> {

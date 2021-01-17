@@ -1,12 +1,62 @@
-use crate::utils::EitherOps;
-use nix::unistd::{access, AccessFlags};
+use std::borrow::Cow;
 use std::env;
 use std::fs::read_dir;
 use std::io::{self};
 use std::iter;
 use std::path::{Path, PathBuf};
 
-pub fn binaries() -> impl Iterator<Item = io::Result<PathBuf>> {
+use nix::unistd::{access, AccessFlags};
+
+use crate::model::{Config, EntryPlugin, ListEntry};
+use crate::{
+    model::RunFlags,
+    utils::{filter_log, EitherOps},
+};
+
+pub struct RawPathPlugin {
+    inner: Box<dyn Iterator<Item = ListEntry>>,
+}
+
+impl RawPathPlugin {
+    pub fn new() -> Self {
+        Self {
+            inner : Box::new(None.into_iter())
+        }
+    }
+}
+
+impl EntryPlugin for RawPathPlugin {
+    fn start(&mut self, _config: &Config) {
+        let iter = binaries()
+            .filter_map(filter_log(|e| {
+                eprintln!("ERROR From path variable: {:?}", e);
+            }))
+            .map(make_entry);
+        self.inner = Box::new(iter);
+    }
+    fn name(&self) -> String {
+        "Raw $PATH Variable".to_owned()
+    }
+    fn next(&mut self) -> Option<ListEntry> {
+        self.inner.next()
+    }
+}
+
+fn make_entry(raw_path: impl AsRef<Path>) -> ListEntry {
+    let path_str = match raw_path.as_ref().to_string_lossy() {
+        Cow::Borrowed(s) => s.to_owned(),
+        Cow::Owned(s) => s,
+    };
+    ListEntry {
+        display_name: None, 
+        exec_command: vec![path_str],
+        exec_flags: RunFlags::new(),
+        search_terms: Vec::new(),
+        children: Vec::new(),
+    }
+}
+
+fn binaries() -> impl Iterator<Item = io::Result<PathBuf>> {
     root_folders().flat_map(|root| {
         let entiter = match read_dir(&root) {
             Ok(t) => t,

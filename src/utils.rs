@@ -1,3 +1,12 @@
+pub fn filter_log<T, E, F: Fn(E)>(err_cb: F) -> impl Fn(Result<T, E>) -> Option<T> {
+    move |res| match res {
+        Ok(r) => Some(r),
+        Err(e) => {
+            (err_cb)(e);
+            None
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum Either<L, R> {

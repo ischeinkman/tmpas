@@ -145,6 +145,7 @@ impl RunFlags {
         self.0 & Self::SHOULD_FORK.0 != 0
     }
 
+    #[allow(dead_code)]
     pub fn set_should_fork(&mut self, value: bool) {
         if value {
             self.0 |= Self::SHOULD_FORK.0;
@@ -153,6 +154,7 @@ impl RunFlags {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_should_fork(mut self, value: bool) -> Self {
         self.set_should_fork(value);
         self

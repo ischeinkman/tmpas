@@ -28,7 +28,8 @@ impl UiState {
             .lock()
             .execute(terminal::EnterAlternateScreen)?
             .execute(terminal::DisableLineWrap)?
-            .execute(cursor::Hide)?;
+            .execute(cursor::Hide)?
+            .flush()?;
         terminal::enable_raw_mode()?;
         Ok(Self {
             stdout: LazyWriter::new(stdout),
@@ -108,19 +109,20 @@ impl UiState {
         self.stdout.flush()?;
         Ok(())
     }
+
+    fn on_drop(&mut self) -> crossterm::Result<()> {
+        terminal::disable_raw_mode()?;
+        self.stdout
+            .execute(terminal::EnableLineWrap)?
+            .execute(terminal::LeaveAlternateScreen)?
+            .execute(cursor::Show)?
+            .flush()?;
+        Ok(())
+    }
 }
 
 impl Drop for UiState {
     fn drop(&mut self) {
-        terminal::disable_raw_mode()
-            .and_then(|_| {
-                self.stdout
-                    .execute(terminal::EnableLineWrap)?
-                    .execute(terminal::LeaveAlternateScreen)?
-                    .execute(cursor::Show)?
-                    .flush()?;
-                Ok(())
-            })
-            .unwrap();
+        self.on_drop().unwrap();
     }
 }

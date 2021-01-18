@@ -1,13 +1,11 @@
 mod freedesktop;
-use freedesktop::FreedesktopPlugin;
 
 mod rawpath;
-use rawpath::RawPathPlugin;
 
 mod utils;
 
 mod model;
-use model::{ ListEntry};
+use model::ListEntry;
 
 mod state;
 use state::State;
@@ -17,18 +15,21 @@ use config::Config;
 
 mod tui;
 
-fn main() {
-    let config = Config {
-        list_size: 10,
-        language: Some("en".to_owned()),
-        terminal_runner: "alacritty --title $DISPLAY_NAME --command $COMMAND".to_owned(),
-    };
+mod dummy;
 
-    let xdgp = FreedesktopPlugin::new();
-    let ptp = RawPathPlugin::new();
+fn main() {
+    let argv = std::env::args_os().collect::<Vec<_>>();
+    let config_path = if argv.len() > 1 {
+        argv.last().map(std::path::Path::new)
+    } else {
+        None
+    };
+    let config: Config = config_path
+        .and_then(|pt| std::fs::read_to_string(pt).ok())
+        .and_then(|st| toml::de::from_str(&st).ok())
+        .unwrap_or_default();
+    eprintln!("CONFIG: {:?}", config);
     let mut state = State::new(config);
-    state.push_plugin(xdgp);
-    state.push_plugin(ptp);
     state.start();
 
     let mut ui = tui::UiState::new().unwrap();
@@ -60,7 +61,7 @@ fn main() {
 pub enum UiMessage {
     DoSearch(String),
     RunEntry(ListEntry),
-    Quit, 
+    Quit,
 }
 
 #[non_exhaustive]

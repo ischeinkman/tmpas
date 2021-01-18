@@ -1,10 +1,9 @@
-use crate::model::{ EntryPlugin, ListEntry, };
 use crate::config::Config;
+use crate::model::{EntryPlugin, ListEntry};
 
-
+use nix::unistd::{execvp, fork, ForkResult};
 use std::collections::HashMap;
 use std::ffi::CString;
-use nix::unistd::{ForkResult, fork, execvp};
 
 pub struct State {
     pub config: Config,
@@ -28,21 +27,23 @@ impl State {
             plugins: Vec::new(),
         }
     }
-    pub fn push_plugin<P: EntryPlugin + 'static>(&mut self, plugin: P) {
-        self.plugins.push(Box::new(plugin));
-    }
     pub fn start(&mut self) {
+        for builtin in &self.config.builtin_plugins {
+            self.plugins.push(builtin.load());
+        }
+        for loaded in &self.config.loaded_plugins {
+            self.plugins.push(loaded.load());
+        }
+        eprintln!("Loaded plugins: {:?}", self.plugins.iter().map(|p| p.name()).collect::<Vec<_>>());
         for plugin in &mut self.plugins {
             plugin.start(&self.config);
         }
         while let Some(()) = self.load_next_entry() {}
     }
-    pub fn search_loaded(&mut self, key: &str) -> Vec<ListEntry> {
+    pub fn search_loaded(&self, key: &str) -> Vec<ListEntry> {
         let mut retvl = Vec::new();
-        let mut retlen = 0;
         for ent in self.entries.values() {
             if matches_search(key, ent) {
-                retlen += ent.expanded_length(1);
                 retvl.push(ent.clone());
             } else {
                 for child in ent
@@ -51,11 +52,7 @@ impl State {
                     .filter(|child| matches_search(key, child))
                 {
                     retvl.push(child.clone());
-                    retlen += 1;
                 }
-            }
-            if retlen >= self.config.list_size {
-                break;
             }
         }
 
@@ -95,7 +92,7 @@ impl State {
         Some(())
     }
     #[allow(dead_code)]
-    pub fn run(&self, ent : &ListEntry) {
+    pub fn run(&self, ent: &ListEntry) {
         let binary: &str = match ent.exec_name() {
             Some(n) => n,
             None => {

@@ -1,11 +1,11 @@
 use crate::model::ListEntry;
 
-use crossterm::{terminal, cursor, QueueableCommand, style};
+use crossterm::{cursor, style, terminal, QueueableCommand};
 
-use std::io::Write;
 use std::borrow::Cow;
+use std::io::Write;
 
-#[derive(Default,Debug)]
+#[derive(Default, Debug)]
 pub struct EntryList {
     current_results: Vec<ListEntry>,
     screen_offset: usize,
@@ -16,9 +16,10 @@ impl EntryList {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn set_results(&mut self, new_results : Vec<ListEntry>) {
+    pub fn set_results(&mut self, new_results: Vec<ListEntry>) {
         self.current_results = new_results;
-        self.screen_offset = 0;self.selection_position = 0;
+        self.screen_offset = 0;
+        self.selection_position = 0;
     }
     pub fn cursor_up(&mut self) {
         if self.selection_position > 1 {
@@ -45,16 +46,14 @@ impl EntryList {
         let idx = self.screen_offset + selected_offset;
         self.current_results.get(idx)
     }
-    pub fn display(&mut self,  output: &mut impl Write) -> crossterm::Result<()> {
+    pub fn display(&mut self, output: &mut impl Write) -> crossterm::Result<()> {
         let (_width, height) = terminal::size()?;
         let mut cur_offset = 1u16;
         for ent in self.current_results.iter().skip(self.screen_offset) {
             let selection = self.selection_position.checked_sub(cur_offset.into());
-            let next_offset = queue_display_recursive( output, ent, 0, selection)?;
+            let next_offset = queue_display_recursive(output, ent, 0, selection)?;
             cur_offset += next_offset as u16;
-            if cur_offset >= height.saturating_sub(3)
-                || next_offset == 0
-            {
+            if cur_offset >= height.saturating_sub(3) || next_offset == 0 {
                 break;
             }
         }

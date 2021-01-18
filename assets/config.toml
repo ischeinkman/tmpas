@@ -1,0 +1,19 @@
+
+# Available substitutions:
+# * `$DISPLAY_NAME`
+# * `$BINARY`
+# * `$FLAGS`
+# * `$COMMAND`
+terminal_runner = "alacritty --title $DISPLAY_NAME --command $COMMAND"
+
+language = "en"
+
+# Available default plugins:
+# * `"xdg"`
+# * `"path"`
+plugins = ["xdg", "path"]
+
+# Available dynamic plugin kinds:
+# * `"dummy"`
+[[plugin]]
+kind = "dummy"

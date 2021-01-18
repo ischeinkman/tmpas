@@ -1,6 +1,3 @@
-mod freedesktop;
-
-mod rawpath;
 
 mod utils;
 
@@ -15,7 +12,8 @@ use config::Config;
 
 mod tui;
 
-mod dummy;
+
+mod plugins;
 
 fn main() {
     let argv = std::env::args_os().collect::<Vec<_>>();

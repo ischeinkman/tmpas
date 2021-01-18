@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(default)]
-    pub terminal_runner: Option<String>,
+    pub terminal: Option<String>,
     #[serde(default)]
     pub language: Option<String>,
     #[serde(default, rename = "plugins")]
@@ -36,7 +36,7 @@ impl Config {
             ("$COMMAND", &command),
         ];
         let mut raw = self
-            .terminal_runner
+            .terminal
             .as_deref()
             .unwrap_or("$COMMAND")
             .to_owned();

@@ -35,7 +35,51 @@ impl EntryPlugin for FreedesktopPlugin {
             .filter_map(filter_log(|e| {
                 eprintln!("ERROR from xdg: {:?}", e);
             }))
-            .map(move |section| section_to_entry(section, language.as_deref()))
+            .flat_map(move |sections| {
+                let mut parent = None;
+                let mut children = Vec::new();
+                let mut errors = Vec::new();
+                for section in sections {
+                    let is_parent = section.header == "Desktop Entry";
+
+                    let res = section_to_entry(section, language.as_deref());
+                    match res {
+                        Ok(ent) if is_parent && parent.is_none() => {
+                            parent = Some(ent);
+                        }
+                        Ok(ent) if is_parent => {
+                            errors.push(Err(format!(
+                                "Found duplicate parents: {:?}, {:?}",
+                                parent, ent
+                            )));
+                        }
+                        Ok(ent) => {
+                            children.push(ent);
+                        }
+                        Err(e) => {
+                            errors.push(Err(e));
+                        }
+                    }
+                }
+                let output_itr = match parent {
+                    Some(mut parent) => {
+                        parent.children = children;
+                        Some(parent).into_iter().left()
+                    }
+                    None if !children.is_empty() => {
+                        errors.push(Err(format!(
+                            "Could not find parent; returning {} children.",
+                            children.len()
+                        )));
+                        children.into_iter().right()
+                    }
+                    None => {
+                        errors.push(Err("Found no sections in desktop file.".to_owned()));
+                        None.into_iter().left()
+                    }
+                };
+                output_itr.map(Ok).chain(errors.into_iter())
+            })
             .filter_map(filter_log(|e| {
                 eprintln!("ERROR from xdg: {:?}", e);
             }));
@@ -74,13 +118,13 @@ fn section_to_entry(section: Section, language: Option<&str>) -> Result<ListEntr
     Ok(res)
 }
 
-fn get_sections() -> impl Iterator<Item = io::Result<Section>> {
-    searching::xdg_desktop_files().flat_map(|path_res| {
+fn get_sections() -> impl Iterator<Item = io::Result<Vec<Section>>> {
+    searching::xdg_desktop_files().map(|path_res| {
         let file_res = path_res.and_then(File::open).map(BufReader::new);
         let file = match file_res {
             Ok(file) => file,
             Err(e) => {
-                return iter::once(Err(e)).right();
+                return Err(e);
             }
         };
         let mut reader = SectionReader::new();
@@ -101,7 +145,7 @@ fn get_sections() -> impl Iterator<Item = io::Result<Section>> {
                 return mem::take(&mut reader).finish().map(Ok);
             }
         })
-        .left()
+        .collect::<io::Result<Vec<_>>>()
     })
 }
 

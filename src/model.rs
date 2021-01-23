@@ -8,7 +8,7 @@ pub trait EntryPlugin {
     fn next(&mut self) -> Option<ListEntry>;
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Default)]
 pub struct ListEntry {
     pub display_name: Option<String>,
     pub search_terms: Vec<String>,
@@ -37,8 +37,31 @@ impl ListEntry {
                 .children
                 .iter()
                 .map(|child| child.expanded_length(level - 1))
-                .sum(),
+                .sum::<usize>()
+                .saturating_add(1),
         }
+    }
+
+    pub fn get_leaf(&self, level: usize, idx: usize) -> Option<&ListEntry> {
+        if idx == 0 {
+            return Some(self);
+        }
+        else if level == 0 {
+            return None;
+        }
+        let mut child_offset = 1;
+        for child in self.children.iter() {
+            let child_len = child.expanded_length(level - 1);
+            if idx >= child_offset + child_len {
+                child_offset += child_len;
+                continue;
+            }
+            else {
+                let child_idx = idx - child_offset;
+                return child.get_leaf(level - 1, child_idx);
+            }
+        }
+        None
     }
 }
 
@@ -88,5 +111,76 @@ impl RunFlags {
     pub fn with_should_fork(mut self, value: bool) -> Self {
         self.set_should_fork(value);
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_expanded_length() {
+        let tree: ListEntry = test_ent(
+            "0",
+            vec![
+                test_ent("00", vec![]),
+                test_ent(
+                    "01",
+                    vec![
+                        test_ent("010", vec![]),
+                        test_ent("011", vec![]),
+                        test_ent("012", vec![]),
+                    ],
+                ),
+                test_ent("02", vec![test_ent("021", vec![test_ent("0211", vec![])])]),
+            ],
+        );
+
+        assert_eq!(1, tree.expanded_length(0));
+        assert_eq!(4, tree.expanded_length(1));
+        assert_eq!(8, tree.expanded_length(2));
+        assert_eq!(9, tree.expanded_length(3));
+        assert_eq!(9, tree.expanded_length(4));
+        assert_eq!(9, tree.expanded_length(5));
+    }
+    #[test]
+    fn test_get_leaf() {
+        let tree: ListEntry = test_ent(
+            "0",
+            vec![
+                test_ent("00", vec![]),
+                test_ent(
+                    "01",
+                    vec![
+                        test_ent("010", vec![]),
+                        test_ent("011", vec![]),
+                        test_ent("012", vec![]),
+                    ],
+                ),
+                test_ent("02", vec![test_ent("021", vec![test_ent("0211", vec![])])]),
+            ],
+        );
+        for level in 0..6 {
+            let res = tree.get_leaf(level, 0).and_then(|n| n.display_name.as_deref());
+            assert_eq!(Some("0"), res, "Level : {}", level);
+        }
+
+        let res_11 = tree.get_leaf(1, 1).and_then(|n| n.display_name.as_deref());
+        assert_eq!(Some("00"), res_11);
+        
+        let res_12 = tree.get_leaf(1, 2).and_then(|n| n.display_name.as_deref());
+        assert_eq!(Some("01"), res_12);
+
+        let res_13 = tree.get_leaf(1, 3).and_then(|n| n.display_name.as_deref());
+        assert_eq!(Some("02"), res_13);
+
+    }
+
+    fn test_ent(name: impl AsRef<str>, children: Vec<ListEntry>) -> ListEntry {
+        ListEntry {
+            display_name: Some(name.as_ref().to_owned()),
+            children,
+            ..Default::default()
+        }
     }
 }

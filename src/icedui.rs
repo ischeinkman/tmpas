@@ -1,4 +1,4 @@
-use crate::model::{get_entry_leaf, ListEntry};
+use crate::model::{entry_tree, ListEntry};
 use crate::{AppMessage, State};
 
 use iced::window;
@@ -221,10 +221,7 @@ impl EntryList {
     }
 
     fn results_len(&self) -> usize {
-        self.current_results
-            .iter()
-            .map(|ent| ent.expanded_length(MAX_EXPANSION))
-            .sum()
+        entry_tree(&self.current_results, MAX_EXPANSION).count()
     }
     pub fn cursor_up(&mut self) {
         self.selected = self.selected.saturating_sub(1);
@@ -244,7 +241,10 @@ impl EntryList {
         }
     }
     pub fn selected(&self) -> Option<&ListEntry> {
-        get_entry_leaf(&self.current_results, MAX_EXPANSION, self.selected)
+        let idx = self.selected.checked_sub(1)?;
+        entry_tree(&self.current_results, MAX_EXPANSION)
+            .nth(idx)
+            .map(|(_, ent)| ent)
     }
 
     pub fn display(&mut self) -> Element<'_, <IcedUi as Application>::Message> {

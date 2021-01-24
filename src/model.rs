@@ -30,53 +30,38 @@ impl ListEntry {
         let stripped = as_path.file_name().and_then(|s| s.to_str());
         Some(stripped.unwrap_or(raw))
     }
-    pub fn expanded_length(&self, level: usize) -> usize {
-        match level {
-            0 => 1,
-            level => self
-                .children
-                .iter()
-                .map(|child| child.expanded_length(level - 1))
-                .sum::<usize>()
-                .saturating_add(1),
-        }
-    }
+}
 
-    pub fn get_leaf(&self, level: usize, idx: usize) -> Option<&ListEntry> {
-        if idx == 0 {
-            return Some(self);
-        }
-        else if level == 0 {
-            return None;
-        }
-        let mut child_offset = 1;
-        for child in self.children.iter() {
-            let child_len = child.expanded_length(level - 1);
-            if idx >= child_offset + child_len {
-                child_offset += child_len;
-                continue;
-            }
-            else {
-                let child_idx = idx - child_offset;
-                return child.get_leaf(level - 1, child_idx);
-            }
-        }
-        None
+pub fn entry_tree(
+    base_level: &[ListEntry],
+    max_level: usize,
+) -> impl Iterator<Item = (usize, &ListEntry)> {
+    ListEntryTreeIter::new(base_level, max_level)
+}
+
+struct ListEntryTreeIter<'a> {
+    queue: Vec<(usize, &'a ListEntry)>,
+    max_level: usize,
+}
+
+impl<'a> ListEntryTreeIter<'a> {
+    pub fn new(base_list: &'a [ListEntry], max_level: usize) -> Self {
+        let queue = base_list.iter().rev().map(|ent| (0, ent)).collect();
+        Self { queue, max_level }
     }
 }
 
-pub fn get_entry_leaf(cur_children : &[ListEntry], level : usize,  idx : usize,) -> Option<&ListEntry> {
-    if idx == 0 || level == 0 {
-        return None;
-    }
-    let mut cur_offset = 1;
-    for cur_child in cur_children {
-        if let Some(res) = cur_child.get_leaf(level - 1, idx - cur_offset) {
-            return Some(res);
+impl<'a> Iterator for ListEntryTreeIter<'a> {
+    type Item = (usize, &'a ListEntry);
+    fn next(&mut self) -> Option<Self::Item> {
+        let (next_level, next_ent) = self.queue.pop()?;
+        if next_level < self.max_level {
+            for child in next_ent.children.iter().rev() {
+                self.queue.push((next_level + 1, child));
+            }
         }
-        cur_offset += cur_child.expanded_length(level - 1);
+        Some((next_level, next_ent))
     }
-    None
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -133,8 +118,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_expanded_length() {
-        let tree: ListEntry = test_ent(
+    fn test_tree_iter() {
+        let root0: ListEntry = test_ent(
             "0",
             vec![
                 test_ent("00", vec![]),
@@ -149,45 +134,54 @@ mod tests {
                 test_ent("02", vec![test_ent("021", vec![test_ent("0211", vec![])])]),
             ],
         );
-
-        assert_eq!(1, tree.expanded_length(0));
-        assert_eq!(4, tree.expanded_length(1));
-        assert_eq!(8, tree.expanded_length(2));
-        assert_eq!(9, tree.expanded_length(3));
-        assert_eq!(9, tree.expanded_length(4));
-        assert_eq!(9, tree.expanded_length(5));
-    }
-    #[test]
-    fn test_get_leaf() {
-        let tree: ListEntry = test_ent(
-            "0",
+        let root1: ListEntry = test_ent(
+            "1",
             vec![
-                test_ent("00", vec![]),
+                test_ent("10", vec![]),
                 test_ent(
-                    "01",
+                    "11",
                     vec![
-                        test_ent("010", vec![]),
-                        test_ent("011", vec![]),
-                        test_ent("012", vec![]),
+                        test_ent("110", vec![]),
+                        test_ent("111", vec![]),
+                        test_ent("112", vec![]),
                     ],
                 ),
-                test_ent("02", vec![test_ent("021", vec![test_ent("0211", vec![])])]),
+                test_ent("12", vec![test_ent("121", vec![test_ent("1211", vec![])])]),
             ],
         );
-        for level in 0..6 {
-            let res = tree.get_leaf(level, 0).and_then(|n| n.display_name.as_deref());
-            assert_eq!(Some("0"), res, "Level : {}", level);
-        }
 
-        let res_11 = tree.get_leaf(1, 1).and_then(|n| n.display_name.as_deref());
-        assert_eq!(Some("00"), res_11);
-        
-        let res_12 = tree.get_leaf(1, 2).and_then(|n| n.display_name.as_deref());
-        assert_eq!(Some("01"), res_12);
+        let base = [root0, root1];
+        let res_level_0 = entry_tree(&base, 0)
+            .map(|(lvl, ent)| (lvl, ent.display_name.clone().unwrap()))
+            .collect::<Vec<_>>();
+        let expected_level_0 = vec![(0, "0".to_owned()), (0, "1".to_owned())];
+        assert_eq!(expected_level_0, res_level_0);
 
-        let res_13 = tree.get_leaf(1, 3).and_then(|n| n.display_name.as_deref());
-        assert_eq!(Some("02"), res_13);
+        let res_level_1 = entry_tree(&base, 1)
+            .map(|(lvl, ent)| (lvl, ent.display_name.clone().unwrap()))
+            .collect::<Vec<_>>();
+        let expected_level_1 = vec![
+            (0, "0".to_owned()),
+            (1, "00".to_owned()),
+            (1, "01".to_owned()),
+            (1, "02".to_owned()),
+            (0, "1".to_owned()),
+            (1, "10".to_owned()),
+            (1, "11".to_owned()),
+            (1, "12".to_owned()),
+        ];
+        assert_eq!(expected_level_1, res_level_1);
 
+        let (max_level, count) = entry_tree(&base, usize::max_value()).fold(
+            (0, 0),
+            |(cur_max, cur_count), (lvl, _ent)| {
+                let next_max = cur_max.max(lvl);
+                let next_count = cur_count + 1;
+                (next_max, next_count)
+            },
+        );
+        assert_eq!(max_level, 3);
+        assert_eq!(count, 18);
     }
 
     fn test_ent(name: impl AsRef<str>, children: Vec<ListEntry>) -> ListEntry {

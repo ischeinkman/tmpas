@@ -7,7 +7,20 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+futures = {version = "0.3", optional = true}
+iced = {version = "0.2", optional = true}
+iced_futures = {version = "0.2", optional = true}
+iced_native = {version = "0.3", optional = true}
 nix = "0.19"
 crossterm="0.19"
 toml = "0.5"
 serde = {version = "1.0", features = ["derive"]}
+
+[features]
+default = ["iced-ui"]
+iced-ui = [
+  "iced",
+  "iced_futures",
+  "iced_native",
+  "futures",
+]

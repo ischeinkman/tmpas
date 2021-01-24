@@ -65,6 +65,20 @@ impl ListEntry {
     }
 }
 
+pub fn get_entry_leaf(cur_children : &[ListEntry], level : usize,  idx : usize,) -> Option<&ListEntry> {
+    if idx == 0 || level == 0 {
+        return None;
+    }
+    let mut cur_offset = 1;
+    for cur_child in cur_children {
+        if let Some(res) = cur_child.get_leaf(level - 1, idx - cur_offset) {
+            return Some(res);
+        }
+        cur_offset += cur_child.expanded_length(level - 1);
+    }
+    None
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[repr(C)]
 pub struct RunFlags(u16);

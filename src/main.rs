@@ -1,4 +1,3 @@
-
 mod utils;
 
 mod model;
@@ -12,6 +11,8 @@ use config::Config;
 
 mod tui;
 
+#[cfg(feature = "iced-ui")]
+mod icedui;
 
 mod plugins;
 
@@ -30,32 +31,16 @@ fn main() {
     let mut state = State::new(config);
     state.start();
 
-    let mut ui = tui::UiState::new().unwrap();
-    ui.send_message(AppMessage::SearchResults(state.all_entries()));
-    loop {
-        let step_res = ui.display().and_then(|_| ui.step());
-        match step_res {
-            Ok(Some(UiMessage::DoSearch(key))) => {
-                let res = state.search_loaded(&key);
-                ui.send_message(AppMessage::SearchResults(res));
-            }
-            Ok(Some(UiMessage::RunEntry(ent))) => {
-                drop(ui);
-                state.run(&ent);
-                return;
-            }
-            Ok(Some(UiMessage::Quit)) => {
-                return;
-            }
-            Ok(None) => {}
-            Err(e) => {
-                panic!("Got error: {:?}", e);
-            }
-        }
+    if argv.contains(&"--tui".to_owned().into()) || cfg!(not(feature = "iced-ui")) {
+        tui::run(state);
+    } else {
+        #[cfg(feature = "iced-ui")]
+        icedui::run(state);
     }
 }
 
 #[non_exhaustive]
+#[derive(Debug, Clone)]
 pub enum UiMessage {
     DoSearch(String),
     RunEntry(ListEntry),
@@ -63,6 +48,7 @@ pub enum UiMessage {
 }
 
 #[non_exhaustive]
+#[derive(Debug, Clone)]
 pub enum AppMessage {
     SearchResults(Vec<ListEntry>),
 }

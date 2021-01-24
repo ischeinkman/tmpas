@@ -7,7 +7,7 @@ mod state;
 use state::State;
 
 mod config;
-use config::Config;
+use config::{Config, UiTag};
 
 mod tui;
 
@@ -16,26 +16,65 @@ mod icedui;
 
 mod plugins;
 
+use structopt::StructOpt;
+use utils::ok_or_log;
+
+use std::path::PathBuf;
+
 fn main() {
-    let argv = std::env::args_os().collect::<Vec<_>>();
-    let config_path = if argv.len() > 1 {
-        argv.last().map(std::path::Path::new)
-    } else {
-        None
-    };
-    let config: Config = config_path
-        .and_then(|pt| std::fs::read_to_string(pt).ok())
-        .and_then(|st| toml::de::from_str(&st).ok())
+    let args = CmdArgs::from_args();
+    if args.verify {
+        let path = args
+            .config
+            .expect("Was not given path to config file to verify.");
+        let raw = std::fs::read_to_string(path).unwrap();
+        let parsed: Config = toml::de::from_str(&raw).unwrap();
+        println!("{:?}", parsed);
+        return;
+    }
+    let config: Config = args
+        .config
+        .as_ref()
+        .and_then(|pt| {
+            ok_or_log(std::fs::read_to_string(pt), |e| {
+                eprintln!("Error reading config: {}", e)
+            })
+        })
+        .and_then(|st| {
+            ok_or_log(toml::de::from_str(&st), |e| {
+                eprintln!("Error parsing config: {}", e)
+            })
+        })
         .unwrap_or_default();
     eprintln!("CONFIG: {:?}", config);
     let mut state = State::new(config);
     state.start();
 
-    if argv.contains(&"--tui".to_owned().into()) || cfg!(not(feature = "iced-ui")) {
-        tui::run(state);
+    if args.tui && args.gui {
+        panic!("Can't run both the tui and gui at the same time.");
+    }
+    let ui_to_run = if args.tui {
+        UiTag::Crossterm
+    } else if args.gui {
+        UiTag::Iced
     } else {
-        #[cfg(feature = "iced-ui")]
-        icedui::run(state);
+        state.config.default_interface()
+    };
+
+    if !state.config.is_interface_enabled(ui_to_run) {
+        panic!(
+            "Cannot run tmpas using interface {:?}: interface is disabled.",
+            ui_to_run
+        );
+    }
+    match ui_to_run {
+        UiTag::Crossterm => {
+            tui::run(state);
+        }
+        UiTag::Iced => {
+            #[cfg(feature = "iced-ui")]
+            icedui::run(state);
+        }
     }
 }
 
@@ -51,4 +90,18 @@ pub enum UiMessage {
 #[derive(Debug, Clone)]
 pub enum AppMessage {
     SearchResults(Vec<ListEntry>),
+}
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "tmpas")]
+struct CmdArgs {
+    /// Path to the config file
+    #[structopt(long, parse(from_os_str), required_if("verify", "true"))]
+    config: Option<PathBuf>,
+    #[structopt(long)]
+    tui: bool,
+    #[structopt(long)]
+    gui: bool,
+    #[structopt(long)]
+    verify: bool,
 }

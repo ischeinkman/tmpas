@@ -8,6 +8,16 @@ pub fn filter_log<T, E, F: Fn(E)>(err_cb: F) -> impl Fn(Result<T, E>) -> Option<
     }
 }
 
+pub fn ok_or_log<T, E, F: Fn(E)>(res: Result<T, E>, err_cb: F) -> Option<T> {
+    match res {
+        Ok(r) => Some(r),
+        Err(e) => {
+            (err_cb)(e);
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum Either<L, R> {
     Left(L),

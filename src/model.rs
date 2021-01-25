@@ -1,6 +1,9 @@
 use crate::config::Config;
 
-use std::path::Path;
+use std::fmt;
+use std::hash::{Hash, Hasher};
+use std::ops::{Add, AddAssign};
+use std::{cmp::Ordering, path::Path};
 
 pub trait EntryPlugin {
     fn name(&self) -> String;
@@ -36,32 +39,29 @@ pub fn entry_tree(
     base_level: &[ListEntry],
     max_level: usize,
 ) -> impl Iterator<Item = (usize, &ListEntry)> {
-    ListEntryTreeIter::new(base_level, max_level)
+    entry_tree_with_paths(base_level, max_level)
+        .map(|(path, ent)| (path.level().saturating_sub(1), ent))
 }
 
-struct ListEntryTreeIter<'a> {
-    queue: Vec<(usize, &'a ListEntry)>,
+pub fn entry_tree_with_paths(
+    base_level: &[ListEntry],
     max_level: usize,
-}
-
-impl<'a> ListEntryTreeIter<'a> {
-    pub fn new(base_list: &'a [ListEntry], max_level: usize) -> Self {
-        let queue = base_list.iter().rev().map(|ent| (0, ent)).collect();
-        Self { queue, max_level }
-    }
-}
-
-impl<'a> Iterator for ListEntryTreeIter<'a> {
-    type Item = (usize, &'a ListEntry);
-    fn next(&mut self) -> Option<Self::Item> {
-        let (next_level, next_ent) = self.queue.pop()?;
-        if next_level < self.max_level {
-            for child in next_ent.children.iter().rev() {
-                self.queue.push((next_level + 1, child));
+) -> impl Iterator<Item = (EntryPath, &ListEntry)> {
+    let mut queue: Vec<_> = base_level
+        .iter()
+        .enumerate()
+        .rev()
+        .map(|(idx, ent)| (EntryPath::new().then(idx), ent))
+        .collect();
+    std::iter::from_fn(move || {
+        let (next_path, next_ent) = queue.pop()?;
+        if next_path.level().saturating_sub(1) < max_level {
+            for (idx, child) in next_ent.children.iter().enumerate().rev() {
+                queue.push((next_path.then(idx), child));
             }
         }
-        Some((next_level, next_ent))
-    }
+        Some((next_path, next_ent))
+    })
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -110,6 +110,124 @@ impl RunFlags {
     pub fn with_should_fork(mut self, value: bool) -> Self {
         self.set_should_fork(value);
         self
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct EntryPath {
+    offsets: [u16; 8],
+    level: u8,
+}
+
+impl Eq for EntryPath {}
+impl PartialEq for EntryPath {
+    fn eq(&self, other: &Self) -> bool {
+        self.offsets[..self.level()] == other.offsets[..other.level()]
+    }
+}
+
+impl Hash for EntryPath {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        (&self.offsets[..self.level()]).hash(state)
+    }
+}
+impl From<Vec<usize>> for EntryPath {
+    fn from(raw: Vec<usize>) -> Self {
+        let mut retvl = Self::new();
+        for idx in raw {
+            retvl = retvl.then(idx);
+        }
+        retvl
+    }
+}
+
+impl fmt::Debug for EntryPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EntryPath")
+            .field("offsets", &&self.offsets[..self.level()])
+            .finish()
+    }
+}
+
+impl Add for EntryPath {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        let mut nxt = self;
+        nxt += rhs;
+        nxt
+    }
+}
+
+impl AddAssign for EntryPath {
+    fn add_assign(&mut self, rhs: Self) {
+        for other in rhs.iter() {
+            self.push(other);
+        }
+    }
+}
+impl EntryPath {
+    const EMPTY_VALUE: u16 = u16::max_value();
+
+    pub fn new() -> Self {
+        Self {
+            offsets: [Self::EMPTY_VALUE; 8],
+            level: 0,
+        }
+    }
+    fn push(&mut self, next: usize) {
+        self.offsets[self.level as usize] = next as u16;
+        self.level += 1;
+    }
+    pub fn then(&self, next: usize) -> Self {
+        let mut nxt = *self;
+        nxt.push(next);
+        nxt
+    }
+    pub fn level(&self) -> usize {
+        self.level as usize
+    }
+
+    pub fn tail_from(&self, level: usize) -> Self {
+        let mut retvl = Self::new();
+        let offsets_range = level.min(self.level as usize)..(self.level as usize);
+
+        let offsets_slice = &self.offsets[offsets_range];
+        (&mut retvl.offsets[..offsets_slice.len()]).copy_from_slice(offsets_slice);
+        retvl.level = (self.level as usize).saturating_sub(level) as u8;
+        retvl
+    }
+
+
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = usize> + 'a {
+        self.offsets
+            .iter()
+            .take(self.level as usize)
+            .map(|n| *n as usize)
+    }
+    pub fn cmp_depth_first(&self, other: &Self) -> Ordering {
+        let mut self_iter = self.iter();
+        let mut other_iter = other.iter();
+        loop {
+            let self_next = self_iter.next();
+            let other_next = other_iter.next();
+            match (self_next, other_next) {
+                (Some(a), Some(b)) if a == b => {
+                    continue;
+                }
+                (Some(a), Some(b)) => {
+                    return a.cmp(&b);
+                }
+                (None, Some(_)) => {
+                    return Ordering::Less;
+                }
+                (Some(_), None) => {
+                    return Ordering::Greater;
+                }
+                (None, None) => {
+                    return Ordering::Equal;
+                }
+            }
+        }
     }
 }
 
@@ -182,6 +300,62 @@ mod tests {
         );
         assert_eq!(max_level, 3);
         assert_eq!(count, 18);
+
+        let with_paths_0 = entry_tree_with_paths(&base, 0)
+            .map(|(lvl, ent)| (lvl, ent.display_name.clone().unwrap()))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            vec![
+                (vec![0].into(), "0".to_owned()),
+                (vec![1].into(), "1".to_owned()),
+            ],
+            with_paths_0
+        );
+
+        let with_paths_1 = entry_tree_with_paths(&base, 1)
+            .map(|(lvl, ent)| (lvl, ent.display_name.clone().unwrap()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            vec![
+                (vec![0].into(), "0".to_owned()),
+                (vec![0, 0].into(), "00".to_owned()),
+                (vec![0, 1].into(), "01".to_owned()),
+                (vec![0, 2].into(), "02".to_owned()),
+                (vec![1].into(), "1".to_owned()),
+                (vec![1, 0].into(), "10".to_owned()),
+                (vec![1, 1].into(), "11".to_owned()),
+                (vec![1, 2].into(), "12".to_owned()),
+            ],
+            with_paths_1
+        );
+
+        let with_paths_full = entry_tree_with_paths(&base, 1024)
+            .map(|(lvl, ent)| (lvl, ent.display_name.clone().unwrap()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            vec![
+                (vec![0].into(), "0".to_owned()),
+                (vec![0, 0].into(), "00".to_owned()),
+                (vec![0, 1].into(), "01".to_owned()),
+                (vec![0, 1, 0].into(), "010".to_owned()),
+                (vec![0, 1, 1].into(), "011".to_owned()),
+                (vec![0, 1, 2].into(), "012".to_owned()),
+                (vec![0, 2].into(), "02".to_owned()),
+                (vec![0, 2, 0].into(), "021".to_owned()),
+                (vec![0, 2, 0, 0].into(), "0211".to_owned()),
+                (vec![1].into(), "1".to_owned()),
+                (vec![1, 0].into(), "10".to_owned()),
+                (vec![1, 1].into(), "11".to_owned()),
+                (vec![1, 1, 0].into(), "110".to_owned()),
+                (vec![1, 1, 1].into(), "111".to_owned()),
+                (vec![1, 1, 2].into(), "112".to_owned()),
+                (vec![1, 2].into(), "12".to_owned()),
+                (vec![1, 2, 0].into(), "121".to_owned()),
+                (vec![1, 2, 0, 0].into(), "1211".to_owned()),
+            ],
+            with_paths_full
+        );
     }
 
     fn test_ent(name: impl AsRef<str>, children: Vec<ListEntry>) -> ListEntry {
@@ -190,5 +364,22 @@ mod tests {
             children,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn test_pathing() {
+        let base = EntryPath::new().then(10).then(21).then(2).then(43);
+        assert_eq!(4, base.level());
+        assert_eq!(vec![10, 21, 2, 43], base.iter().collect::<Vec<_>>());
+
+        assert_eq!(
+            vec![21, 2, 43],
+            base.tail_from(1).iter().collect::<Vec<_>>()
+        );
+
+        assert_eq!(
+            vec![5, 6, 7, 8],
+            EntryPath::from(vec![5, 6, 7, 8]).iter().collect::<Vec<_>>()
+        );
     }
 }

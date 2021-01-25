@@ -8,12 +8,6 @@ terminal = "alacritty --title $DISPLAY_NAME --command $COMMAND"
 
 language = "en"
 
-[ui.terminal]
-enable=true
-
-[ui.graphical]
-enable=true
-default=true 
 
 # Available default plugins:
 # * `"xdg"`
@@ -24,3 +18,10 @@ plugins = ["xdg", "path"]
 # * `"dummy"`
 [[plugin]]
 kind = "dummy"
+
+[ui.terminal]
+enable=true
+
+[ui.graphical]
+enable=true
+default=true 

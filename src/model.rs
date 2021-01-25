@@ -35,14 +35,6 @@ impl ListEntry {
     }
 }
 
-pub fn entry_tree(
-    base_level: &[ListEntry],
-    max_level: usize,
-) -> impl Iterator<Item = (usize, &ListEntry)> {
-    entry_tree_with_paths(base_level, max_level)
-        .map(|(path, ent)| (path.level().saturating_sub(1), ent))
-}
-
 pub fn entry_tree_with_paths(
     base_level: &[ListEntry],
     max_level: usize,
@@ -62,6 +54,17 @@ pub fn entry_tree_with_paths(
         }
         Some((next_path, next_ent))
     })
+}
+
+pub fn entry_tree_get(base_level: &[ListEntry], path: EntryPath) -> Option<&ListEntry> {
+    let mut cur_level = base_level;
+    let mut path_iter = path.iter();
+    let mut cur_idx = path_iter.next()?;
+    for next_idx in path_iter {
+        cur_level = &cur_level.get(cur_idx)?.children;
+        cur_idx = next_idx;
+    }
+    cur_level.get(cur_idx)
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -165,6 +168,7 @@ impl AddAssign for EntryPath {
         }
     }
 }
+
 impl EntryPath {
     const EMPTY_VALUE: u16 = u16::max_value();
 
@@ -187,6 +191,36 @@ impl EntryPath {
         self.level as usize
     }
 
+    pub fn parent(&self) -> Self {
+        if self.level() == 0 {
+            *self
+        } else {
+            let mut next = *self;
+            next.level -= 1;
+            next
+        }
+    }
+    pub fn prev_sibling(&self) -> Option<Self> {
+        let tail = self
+            .level()
+            .checked_sub(1)
+            .and_then(|n| self.offsets.get(n))
+            .map(|n| *n as usize)
+            .unwrap_or(0);
+        if tail == 0 {
+            None
+        } else {
+            Some(self.parent().then(tail - 1))
+        }
+    }
+    pub fn next_sibling(&self) -> Option<Self> {
+        let tail = self
+            .level()
+            .checked_sub(1)
+            .and_then(|n| self.offsets.get(n))
+            .map(|n| *n as usize)?;
+        Some(self.parent().then(tail + 1))
+    }
     pub fn tail_from(&self, level: usize) -> Self {
         let mut retvl = Self::new();
         let offsets_range = level.min(self.level as usize)..(self.level as usize);
@@ -269,37 +303,8 @@ mod tests {
         );
 
         let base = [root0, root1];
-        let res_level_0 = entry_tree(&base, 0)
-            .map(|(lvl, ent)| (lvl, ent.display_name.clone().unwrap()))
-            .collect::<Vec<_>>();
-        let expected_level_0 = vec![(0, "0".to_owned()), (0, "1".to_owned())];
-        assert_eq!(expected_level_0, res_level_0);
 
-        let res_level_1 = entry_tree(&base, 1)
-            .map(|(lvl, ent)| (lvl, ent.display_name.clone().unwrap()))
-            .collect::<Vec<_>>();
-        let expected_level_1 = vec![
-            (0, "0".to_owned()),
-            (1, "00".to_owned()),
-            (1, "01".to_owned()),
-            (1, "02".to_owned()),
-            (0, "1".to_owned()),
-            (1, "10".to_owned()),
-            (1, "11".to_owned()),
-            (1, "12".to_owned()),
-        ];
-        assert_eq!(expected_level_1, res_level_1);
 
-        let (max_level, count) = entry_tree(&base, usize::max_value()).fold(
-            (0, 0),
-            |(cur_max, cur_count), (lvl, _ent)| {
-                let next_max = cur_max.max(lvl);
-                let next_count = cur_count + 1;
-                (next_max, next_count)
-            },
-        );
-        assert_eq!(max_level, 3);
-        assert_eq!(count, 18);
 
         let with_paths_0 = entry_tree_with_paths(&base, 0)
             .map(|(lvl, ent)| (lvl, ent.display_name.clone().unwrap()))

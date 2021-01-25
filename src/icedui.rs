@@ -1,4 +1,4 @@
-use crate::model::{entry_tree, ListEntry};
+use crate::model::{entry_tree_get, entry_tree_with_paths, EntryPath, ListEntry};
 use crate::{AppMessage, State};
 
 use iced::window;
@@ -198,7 +198,7 @@ impl Application for IcedUi {
 #[derive(Debug)]
 pub struct EntryList {
     current_results: Vec<ListEntry>,
-    selected: usize,
+    selected: EntryPath,
     view_offset: usize,
     view_length: usize,
 }
@@ -209,66 +209,88 @@ impl EntryList {
     pub fn new() -> Self {
         Self {
             current_results: Vec::new(),
-            selected: 0,
+            selected: EntryPath::new().then(0),
             view_offset: 0,
             view_length: 30,
         }
     }
     pub fn set_results(&mut self, new_results: Vec<ListEntry>) {
         self.current_results = new_results;
-        self.selected = 0;
+        self.selected = EntryPath::new();
         self.view_offset = 0;
     }
 
-    fn results_len(&self) -> usize {
-        entry_tree(&self.current_results, MAX_EXPANSION).count()
-    }
     pub fn cursor_up(&mut self) {
-        self.selected = self.selected.saturating_sub(1);
-        self.view_offset = self.view_offset.min(self.selected);
+        if let Some(nxt) = self.selected.prev_sibling() {
+            let mut sibling_ent = entry_tree_get(&self.current_results, nxt).unwrap();
+            let mut next_path = nxt;
+            while let Some((idx, ent)) = sibling_ent.children.iter().enumerate().last() {
+                next_path = next_path.then(idx);
+                sibling_ent = ent;
+            }
+            self.selected = next_path;
+        }
+        else {
+            self.selected = self.selected.parent();
+        }
+        self.correct_offset();
     }
+
     pub fn cursor_down(&mut self) {
-        self.selected = if self.selected < self.results_len() - 1 {
-            self.selected + 1
-        } else {
-            0
+        let mut cur_next = self.selected.then(0);
+        loop {
+            let cur_next_ent = entry_tree_get(&self.current_results, cur_next);
+            if cur_next_ent.is_some() {
+                break;
+            }
+            match cur_next.parent().next_sibling() {
+                Some(n) => {
+                    cur_next = n;
+                }
+                None => {
+                    break;
+                }
+            }
+        }
+        self.selected = cur_next;
+        self.correct_offset();
+    }
+
+    fn correct_offset(&mut self) {
+        let selection_idx = entry_tree_with_paths(&self.current_results, 1024)
+            .map(|(path, _)| path)
+            .enumerate()
+            .find(|(_, pt)| *pt == self.selected)
+            .map(|(idx, _)| idx);
+        let selection_idx = match selection_idx {
+            Some(n) => n,
+            None => {
+                return;
+            }
         };
-        if self.selected >= self.view_offset + self.view_length {
-            self.view_offset = self
-                .selected
-                .saturating_sub(self.view_length)
-                .saturating_sub(1);
+        let view_start = self.view_offset;
+        let view_end = self.view_offset + self.view_length;
+        if selection_idx >= view_end {
+            self.view_offset = selection_idx - self.view_length + 1;
+        } else if selection_idx < view_start {
+            self.view_offset = selection_idx;
         }
     }
+
     pub fn selected(&self) -> Option<&ListEntry> {
-        let idx = self.selected.checked_sub(1)?;
-        entry_tree(&self.current_results, MAX_EXPANSION)
-            .nth(idx)
-            .map(|(_, ent)| ent)
+        entry_tree_get(&self.current_results, self.selected)
     }
 
     pub fn display(&mut self) -> Element<'_, <IcedUi as Application>::Message> {
         let mut retvl = Column::new();
-        let mut display_queue = self
-            .current_results
-            .iter()
-            .rev()
-            .map(|row| (0, row))
-            .collect::<Vec<_>>();
-        let mut cur_rows = 0;
-        while let Some((level, ent)) = display_queue.pop() {
-            if cur_rows >= self.view_length + self.view_offset {
-                break;
-            }
-            if cur_rows >= self.view_offset {
-                let selected = self.selected == cur_rows + 1;
-                let row = make_child_row(ent, level, selected);
-                retvl = retvl.push(row);
-            }
-            for child in ent.children.iter().rev() {
-                display_queue.push((level + 1, child));
-            }
-            cur_rows += 1;
+        let relevant = entry_tree_with_paths(&self.current_results, MAX_EXPANSION)
+            .skip(self.view_offset)
+            .take(self.view_length);
+        for (path, ent) in relevant {
+            let level = path.level() - 1;
+            let selected = self.selected == path;
+            let row = make_child_row(ent, level, selected);
+            retvl = retvl.push(row);
         }
         retvl.into()
     }

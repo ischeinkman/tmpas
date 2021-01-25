@@ -41,12 +41,12 @@ pub fn run(state: State) {
 
 pub struct IcedUiExecutor {
     _background_handle: thread::JoinHandle<()>,
-    sender: mpsc::SyncSender<Box<dyn std::future::Future<Output = ()> + Send + 'static>>,
+    sender: mpsc::Sender<Box<dyn std::future::Future<Output = ()> + Send + 'static>>,
 }
 
 impl Executor for IcedUiExecutor {
     fn new() -> Result<Self, futures::io::Error> {
-        let (sender, recv) = mpsc::sync_channel(8);
+        let (sender, recv) = mpsc::channel();
         let mut task_queue = Vec::new();
         let _background_handle = thread::spawn(move || loop {
             match recv.try_recv() {
@@ -77,6 +77,7 @@ impl Executor for IcedUiExecutor {
                 }
             }
             task_queue = next_queue;
+            std::thread::sleep(std::time::Duration::from_millis(10));
         });
         Ok(Self {
             sender,

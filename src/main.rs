@@ -14,6 +14,9 @@ mod tui;
 #[cfg(feature = "iced-ui")]
 mod icedui;
 
+#[cfg(feature = "smithay-ui")]
+mod smithayui;
+
 mod plugins;
 
 use structopt::StructOpt;
@@ -55,6 +58,8 @@ fn main() {
     }
     let ui_to_run = if args.tui {
         UiTag::Crossterm
+    } else if args.gui && cfg!(feature = "smithay-ui") {
+        UiTag::Smithay
     } else if args.gui {
         UiTag::Iced
     } else {
@@ -74,6 +79,10 @@ fn main() {
         UiTag::Iced => {
             #[cfg(feature = "iced-ui")]
             icedui::run(state);
+        }
+        UiTag::Smithay => {
+            #[cfg(feature = "smithay-ui")]
+            smithayui::run(state);
         }
     }
 }

@@ -48,6 +48,10 @@ impl Config {
         if cfg!(not(feature = "iced-ui")) && tag == UiTag::Iced {
             return false;
         }
+        if cfg!(not(feature = "smithay-ui")) && tag == UiTag::Smithay {
+            return false;
+        }
+
         self.interfaces
             .get(&tag)
             .map(|conf| conf.enable)
@@ -102,12 +106,13 @@ impl Default for UiConfig {
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub enum UiTag {
     Iced,
+    Smithay,
     Crossterm,
 }
 
 impl UiTag {
     pub const fn all() -> &'static [UiTag] {
-        &[UiTag::Iced, UiTag::Crossterm]
+        &[UiTag::Iced, UiTag::Crossterm, UiTag::Smithay]
     }
 }
 
@@ -119,9 +124,13 @@ impl PartialOrd for UiTag {
 impl Ord for UiTag {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match (self, other) {
-            (UiTag::Crossterm, UiTag::Iced) => std::cmp::Ordering::Greater,
-            (UiTag::Iced, UiTag::Crossterm) => std::cmp::Ordering::Less,
-            (_, _) => std::cmp::Ordering::Equal,
+            (UiTag::Iced, UiTag::Iced)
+            | (UiTag::Smithay, UiTag::Smithay)
+            | (UiTag::Crossterm, UiTag::Crossterm) => std::cmp::Ordering::Equal,
+            (UiTag::Iced, _) => std::cmp::Ordering::Greater,
+            (_, UiTag::Iced) => std::cmp::Ordering::Less,
+            (UiTag::Smithay, UiTag::Crossterm) => std::cmp::Ordering::Less,
+            (UiTag::Crossterm, UiTag::Smithay) => std::cmp::Ordering::Less,
         }
     }
 }
@@ -132,7 +141,8 @@ impl serde::Serialize for UiTag {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let tag = match *self {
             UiTag::Crossterm => "terminal",
-            UiTag::Iced => "graphical",
+            UiTag::Smithay => "graphical",
+            UiTag::Iced => "graphical-iced",
         };
         serializer.serialize_str(tag)
     }
@@ -140,7 +150,7 @@ impl serde::Serialize for UiTag {
 
 impl<'a> serde::Deserialize<'a> for UiTag {
     fn deserialize<D: Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_str(UiTagVisitor{})
+        deserializer.deserialize_str(UiTagVisitor {})
     }
 }
 
@@ -153,12 +163,10 @@ impl<'a> serde::de::Visitor<'a> for UiTagVisitor {
     }
     fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
         match v {
-            "terminal" | "crossterm" => Ok(UiTag::Crossterm), 
-            "graphical" | "iced"  => Ok(UiTag::Iced), 
-            other => Err(E::unknown_variant(other, &[
-                "terminal", "graphical"
-            ])),
+            "terminal" | "crossterm" => Ok(UiTag::Crossterm),
+            "graphical-iced" | "iced" => Ok(UiTag::Iced),
+            "graphical" | "smithay" => Ok(UiTag::Smithay),
+            other => Err(E::unknown_variant(other, &["terminal", "graphical"])),
         }
     }
-
 }

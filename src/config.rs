@@ -52,6 +52,10 @@ impl Config {
             return false;
         }
 
+        if cfg!(not(feature="crossterm-ui")) && tag == UiTag::Crossterm {
+            return false;
+        }
+
         self.interfaces
             .get(&tag)
             .map(|conf| conf.enable)

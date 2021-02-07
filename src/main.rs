@@ -9,6 +9,7 @@ use state::State;
 mod config;
 use config::{Config, UiTag};
 
+#[cfg(feature = "crossterm-ui")]
 mod tui;
 
 #[cfg(feature = "iced-ui")]
@@ -74,6 +75,7 @@ fn main() {
     }
     match ui_to_run {
         UiTag::Crossterm => {
+            #[cfg(feature = "crossterm-ui")]
             tui::run(state);
         }
         UiTag::Iced => {

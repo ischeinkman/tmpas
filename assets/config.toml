@@ -19,6 +19,14 @@ plugins = ["xdg", "path"]
 [[plugin]]
 kind = "dummy"
 
+[[plugin]]
+kind = 'lua'
+file = 'assets/steam.lua'
+
+[[plugin]]
+kind = 'lua'
+file = 'assets/roms.lua'
+
 [ui.terminal]
 enable=true
 

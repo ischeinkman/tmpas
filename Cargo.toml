@@ -23,8 +23,10 @@ andrew = {version = "0.3", optional = true}
 wayland-client = {version = "0.28", optional = true}
 smithay-client-toolkit = {version = "0.12", optional = true}
 
+mlua = {version = "0.5.1", features = ["vendored", "luajit", "serialize", "send"], optional=true}
+
 [features]
-default = ["smithay-ui"]
+default = ["smithay-ui", "plugin-lua"]
 iced-ui = [
   "iced",
   "iced_futures",
@@ -35,4 +37,8 @@ smithay-ui = [
   "smithay-client-toolkit",
   "andrew",
   "wayland-client",
+]
+
+plugin-lua = [
+  "mlua"
 ]

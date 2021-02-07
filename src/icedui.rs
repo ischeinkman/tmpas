@@ -114,10 +114,10 @@ impl Application for IcedUi {
     type Message = Message;
     type Flags = super::State;
 
-    fn new(app_state: Self::Flags) -> (Self, Command<Self::Message>) {
+    fn new(mut app_state: Self::Flags) -> (Self, Command<Self::Message>) {
         let search_buffer = SearchBuffer::new();
         let mut entry_list = EntryList::new();
-        let entries = app_state.all_entries();
+        let entries = app_state.search("", 1024);
         entry_list.set_results(entries);
         let res = Self {
             app_state,
@@ -137,7 +137,7 @@ impl Application for IcedUi {
             }
             Message::SetBuffer(buf) => {
                 self.search_buffer.buffer = buf;
-                let new_res = self.app_state.search_loaded(&self.search_buffer.buffer);
+                let new_res = self.app_state.search(&self.search_buffer.buffer, 1024);
                 self.entry_list.set_results(new_res);
                 Command::none()
             }

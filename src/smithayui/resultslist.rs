@@ -30,11 +30,25 @@ impl EntryList {
         self.screen_offset = 0;
         self.selection_position = 0;
     }
+    pub fn max_entries(&self) -> usize {
+        let max_height: usize = 1080;
+        max_height / self.config.entry_height()
+    }
+    pub fn cur_results_height(&self) -> usize {
+        entry_tree_with_paths(&self.current_results, 1024).count()
+    }
     pub fn selected(&self) -> Option<&ListEntry> {
         let idx = self.selection_position.checked_sub(1)?;
         entry_tree_with_paths(&self.current_results, 1024)
             .map(|(_, ent)| ent)
             .nth(idx)
+    }
+
+    pub fn buffer_height(&self) -> usize {
+        self.cur_results_height().saturating_sub(self.screen_offset)
+    }
+    pub fn set_buffer(&mut self, expanded_results : Vec<ListEntry>) {
+        self.current_results = expanded_results;
     }
     pub fn push_action(&mut self, action: KeyAction) -> ActionResponse {
         match action {
@@ -42,16 +56,19 @@ impl EntryList {
                 let nxt = self.selection_position.saturating_sub(1);
                 if nxt != self.selection_position {
                     self.selection_position = nxt;
+                    eprintln!("Pos: {:?}", self.selection_position);
                     ActionResponse::NeedsRedraw
                 } else {
                     ActionResponse::Handled
                 }
             }
             KeyAction::Down => {
-                if self.selection_position >= self.current_results.len() {
+                if self.selection_position >= self.cur_results_height() {
                     self.selection_position = 0;
+                    eprintln!("Pos: {:?}", self.selection_position);
                 } else {
                     self.selection_position += 1;
+                    eprintln!("Pos: {:?}", self.selection_position);
                 }
                 ActionResponse::NeedsRedraw
             }

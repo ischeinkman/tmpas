@@ -105,7 +105,7 @@ pub fn run(state: State) {
     }
 }
 
-fn run_inner(state: State) -> Option<(State, ListEntry)> {
+fn run_inner(mut state: State) -> Option<(State, ListEntry)> {
     /*
      * Initial setup
      */
@@ -244,7 +244,7 @@ fn run_inner(state: State) -> Option<(State, ListEntry)> {
     let bar_cfg = SearchbarConfig::default();
     let mut bar = SearchBar::new(bar_cfg);
     let mut resl = EntryList::new(EntryListConfig::new().unwrap());
-    resl.set_results(state.all_entries());
+    resl.set_results(state.search("", 4 * resl.max_entries()));
     if !env.get_shell().unwrap().needs_configure() {
         // initial draw to bootstrap on wl_shell
         if let Some(pool) = pools.pool() {
@@ -260,6 +260,7 @@ fn run_inner(state: State) -> Option<(State, ListEntry)> {
         .unwrap();
 
     let mut needs_redraw = false;
+    let mut can_expand = true;
     loop {
         let mut had_handled = false;
         let old_buffer = bar.buffer.clone();
@@ -295,7 +296,14 @@ fn run_inner(state: State) -> Option<(State, ListEntry)> {
             };
         }
         if old_buffer != bar.buffer {
-            resl.set_results(state.search_loaded(&bar.buffer));
+            resl.set_results(state.search(&bar.buffer, 4 * resl.max_entries()));
+            needs_redraw = true;
+            can_expand = true;
+        } else if can_expand && resl.buffer_height() <= resl.max_entries() / 2 {
+            let target_height = resl.cur_results_height() + resl.max_entries() * 2;
+            let new_buffer = state.search(&bar.buffer, target_height);
+            resl.set_buffer(new_buffer);
+            can_expand = resl.cur_results_height() >= target_height;
             needs_redraw = true;
         }
         if had_handled {

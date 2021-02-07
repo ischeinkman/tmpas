@@ -15,6 +15,9 @@ pub struct State {
 }
 
 fn matches_search(key: &str, ent: &ListEntry) -> bool {
+    if key.is_empty() {
+        return true;
+    }
     ent.name().to_lowercase().contains(key)
         || ent
             .search_terms
@@ -45,12 +48,17 @@ impl State {
         while let Some(()) = self.load_next_entry() {}
         self.delete_queued();
     }
-    pub fn search_loaded(&self, key: &str) -> Vec<ListEntry> {
+    fn search_loaded(&mut self, key: &str, max_height: usize) -> Vec<ListEntry> {
         let mut retvl = Vec::new();
+        let mut height = 0;
         let key = key.to_lowercase();
         for ent in self.entries.iter() {
             if matches_search(&key, ent) {
                 retvl.push(ent.clone());
+                height += entry_tree_with_paths(std::slice::from_ref(ent), 1024).count();
+                if height >= max_height {
+                    return retvl;
+                }
             } else {
                 for child in ent
                     .children
@@ -58,6 +66,10 @@ impl State {
                     .filter(|child| matches_search(&key, child))
                 {
                     retvl.push(child.clone());
+                    height += entry_tree_with_paths(std::slice::from_ref(child), 1024).count();
+                    if height >= max_height {
+                        return retvl;
+                    }
                 }
             }
         }
@@ -65,8 +77,40 @@ impl State {
         retvl
     }
 
-    pub fn all_entries(&self) -> Vec<ListEntry> {
-        self.entries.clone()
+    fn cur_search_height(&self, key: &str) -> usize {
+        let mut retvl = 0;
+        let key = key.to_lowercase();
+        for ent in self.entries.iter() {
+            if matches_search(&key, ent) {
+                retvl += entry_tree_with_paths(std::slice::from_ref(ent), 1024).count();
+            } else {
+                for child in ent
+                    .children
+                    .iter()
+                    .filter(|child| matches_search(&key, child))
+                {
+                    retvl += entry_tree_with_paths(std::slice::from_ref(child), 1024).count();
+                }
+            }
+        }
+        retvl
+    }
+
+    pub fn search(&mut self, key: &str, max_height: usize) -> Vec<ListEntry> {
+        const BATCH_SIZE: usize = 30;
+        let mut finished_loading = false;
+        loop {
+            for _ in 0..BATCH_SIZE {
+                if self.load_next_entry().is_none() {
+                    finished_loading = true;
+                    break;
+                }
+            }
+            self.delete_queued();
+            if finished_loading || self.cur_search_height(key) >= max_height {
+                return self.search_loaded(key, max_height);
+            }
+        }
     }
 
     fn load_next_entry(&mut self) -> Option<()> {

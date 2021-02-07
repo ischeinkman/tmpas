@@ -17,14 +17,16 @@ use io::Stdout;
 
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
-pub fn run(state: State) {
+pub fn run(mut state: State) {
     let mut ui = UiState::new().unwrap();
-    ui.send_message(AppMessage::SearchResults(state.all_entries()));
+    let (_width, height) = terminal::size().unwrap();
+    ui.send_message(AppMessage::SearchResults(state.search("", height.into())));
     loop {
         let step_res = ui.display().and_then(|_| ui.step());
         match step_res {
             Ok(Some(UiMessage::DoSearch(key))) => {
-                let res = state.search_loaded(&key);
+                let (_width, height) = terminal::size().unwrap();
+                let res = state.search(&key, height.into());
                 ui.send_message(AppMessage::SearchResults(res));
             }
             Ok(Some(UiMessage::RunEntry(ent))) => {

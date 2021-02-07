@@ -156,9 +156,15 @@ function getdata()
     local cores = get_core_data()
     local bext = by_extension(cores)
     local bsys = by_systemid(cores)
-    local retvl = {}
-    for idx, romdata in pairs(get_roms()) do
-
+    local roms = get_roms()
+    local k = nil
+    return function()
+        print('A')
+        local nextk, romdata = next(roms, k)
+        if not nextk or not romdata then 
+            return nil 
+        end
+        k = nextk
         datacores = {}
 
         if romdata.ext == 'zip' or romdata.ext == '7z' then
@@ -183,11 +189,11 @@ function getdata()
         if #datacores == 1 then
             core = datacores[1]
             for corename, data in pairs(core) do
-                table.insert(retvl, entry {
+                return entry {
                     name = romdata.name,
                     exec = "retroarch -L " .. data.path .. ' ' .. romdata.path,
                     search_terms = {romdata.name, romdata.ext, romdata.systemid, corename}
-                })
+                }
             end
         else
             local head_entry = entry {
@@ -198,7 +204,7 @@ function getdata()
             }
             for idx, core in pairs(datacores) do
                 for corename, data in pairs(core) do
-                    local curexec = "retroarch -L \"" .. data.path .. '" "' .. romdata.path..'"'
+                    local curexec = "retroarch -L \"" .. data.path .. '" "' .. romdata.path .. '"'
                     table.insert(head_entry.children, entry {
                         name = corename,
                         exec = curexec,
@@ -210,13 +216,12 @@ function getdata()
                     end
                 end
             end
-            table.insert(retvl, head_entry)
+            return head_entry
         end
     end
-    return retvl
 end
 
 plugin {
-    name = "Retroarch ROMS", 
-    entries = getdata()
+    name = "Retroarch ROMS",
+    next = getdata()
 }

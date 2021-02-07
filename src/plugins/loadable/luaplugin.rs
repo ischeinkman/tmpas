@@ -307,7 +307,7 @@ impl<'a> LuaPluginState<'a> {
         if !matches!(self.next_flag(), PluginStateNext::Function) {
             return None;
         }
-        self.inner.as_ref()?.get("nextfn").ok().flatten()
+        self.inner.as_ref()?.get("next").ok().flatten()
     }
     fn verify(&self) -> mlua::Result<()> {
         let inner = match self.inner.as_ref() {

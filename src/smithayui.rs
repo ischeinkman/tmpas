@@ -13,9 +13,11 @@ use wayland_client::protocol::{wl_keyboard, wl_shm, wl_surface};
 use std::io::{self, Seek, SeekFrom, Write};
 
 mod resultslist;
-use resultslist::{EntryList, EntryListConfig};
+use resultslist::EntryList;
 mod searchbar;
-use searchbar::{SearchBar, SearchbarConfig};
+use searchbar::SearchBar;
+mod styling;
+use styling::{EntryListConfig, SearchbarConfig, WindowConfig};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Rect {
@@ -209,7 +211,8 @@ fn run_inner(state: State) -> Option<(State, ListEntry)> {
     });
     //==================================================
     let surface = env.create_surface().detach();
-    let mut dimensions = (800, 600);
+    let cfg = WindowConfig::default();
+    let mut dimensions = cfg.dims;
     let mut window = env
         .create_window::<ConceptFrame, _>(
             surface,
@@ -238,23 +241,7 @@ fn run_inner(state: State) -> Option<(State, ListEntry)> {
         .create_double_pool(|_| {})
         .expect("Failed to create a memory pool !");
     //==================================================
-    let font_cfg = andrew::text::fontconfig::FontConfig::new().unwrap();
-    let label_font = font_cfg.get_fonts().unwrap().pop().unwrap();
-    let label_font = andrew::text::load_font_file(label_font);
-    let buffer_font = font_cfg.get_fonts().unwrap().remove(0);
-    let buffer_font = andrew::text::load_font_file(buffer_font);
-    let bar_cfg = SearchbarConfig {
-        label_font,
-        label_size: 24.0,
-        buffer_font,
-        buffer_size: 24.0,
-        buffer_inner_padding: 1,
-        padding: 8,
-        spacing: 16,
-        buffer_color: [255, 0, 0, 0],
-        buffer_background: [255, 255, 255, 0],
-        label_color: [255, 0, 0, 0],
-    };
+    let bar_cfg = SearchbarConfig::default();
     let mut bar = SearchBar::new(bar_cfg);
     let mut resl = EntryList::new(EntryListConfig::new().unwrap());
     resl.set_results(state.all_entries());
@@ -364,7 +351,7 @@ fn redraw(
     pool.seek(SeekFrom::Start(0))?;
     let pool_mem = pool.mmap();
     for idx in 0..4 * buf_x * buf_y {
-        pool_mem[idx] = 128;
+        pool_mem[idx] = 255;
     }
     let mut canvas =
         andrew::Canvas::new(pool_mem, buf_x, buf_y, 4 * buf_x, andrew::Endian::native());

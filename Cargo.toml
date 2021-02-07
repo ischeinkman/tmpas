@@ -13,6 +13,7 @@ nix = "0.19"
 serde = {version = "1.0", features = ["derive"]}
 structopt = "0.3"
 toml = "0.5"
+once_cell = {version = "1.5", optional=true}
 
 futures = {version = "0.3", optional = true}
 iced = {version = "0.2", optional = true}
@@ -37,6 +38,7 @@ smithay-ui = [
   "smithay-client-toolkit",
   "andrew",
   "wayland-client",
+  "once_cell"
 ]
 
 plugin-lua = [

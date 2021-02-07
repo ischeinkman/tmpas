@@ -1,91 +1,12 @@
+use super::styling::EntryListConfig;
 use super::ActionResponse;
 use super::KeyAction;
 use super::Rect;
-use crate::model::{entry_tree_with_paths, EntryPath, ListEntry};
-use std::{panic::catch_unwind, path::PathBuf};
+use crate::model::{entry_tree_with_paths, ListEntry};
 
 use andrew::shapes::rectangle::Rectangle;
-use andrew::text::fontconfig::FontConfig;
-use andrew::text::{load_font_file, Text};
+use andrew::text::Text;
 use andrew::Canvas;
-
-use anyhow::{anyhow, Context, Error};
-
-#[derive(Debug)]
-pub struct EntryListConfig {
-    pub font_size: f32,
-    pub font_data: Vec<u8>,
-    pub entry_spacing: usize,
-}
-
-impl EntryListConfig {
-    pub fn new() -> Result<Self, Error> {
-        let font_config =
-            FontConfig::new().map_err(|_| anyhow!("Could not construct FontConfig."))?;
-        let all_fonts = font_config
-            .get_fonts()
-            .with_context(|| "Error getting font list from config.")?;
-        let valid_fonts = all_fonts
-            .into_iter()
-            .filter_map(|path| {
-                let fname = path.file_name()?.to_string_lossy().to_lowercase();
-                Some((path, fname))
-            })
-            .filter(|(_, fname)| {
-                !fname.contains("bold") && !fname.contains("italic") && !fname.contains("oblique")
-            })
-            .filter(|(_, fname)| fname.contains("sans"));
-        let default_font_path: PathBuf = valid_fonts
-            .map(|(path, _)| path)
-            .next()
-            .ok_or_else(|| anyhow!("Could not find a default font."))?;
-        let font_data = catch_unwind(|| load_font_file(&default_font_path))
-            .map_err(|e| {
-                e.downcast::<String>()
-                    .map(Error::msg)
-                    .or_else(|e| e.downcast::<&str>().map(Error::msg))
-                    .unwrap_or_else(|_| Error::msg("Unknown panic occurred."))
-            })
-            .with_context(|| {
-                format!(
-                    "Error reading font path {} as font data.",
-                    default_font_path.display()
-                )
-            })?;
-        let res = Self {
-            font_size: 32.0,
-            font_data,
-            entry_spacing: 8,
-        };
-        Ok(res)
-    }
-    pub fn text_color(&self, _path: EntryPath, entry: &ListEntry, selected: bool) -> [u8; 4] {
-        let is_term = entry.exec_flags.is_term();
-        if selected {
-            self.background_color(_path, entry, !selected)
-        } else if is_term {
-            [255, 45, 128, 64]
-        } else {
-            [255, 0, 0, 0]
-        }
-    }
-    pub fn background_color(&self, _path: EntryPath, entry: &ListEntry, selected: bool) -> [u8; 4] {
-        let is_term = entry.exec_flags.is_term();
-        if !selected {
-            [192, 255, 255, 255]
-        } else if is_term {
-            [255, 64, 192, 80]
-        } else {
-            [255, 140, 140, 150]
-        }
-    }
-    pub fn entry_height(&self) -> usize {
-        self.font_size.ceil() as usize + self.entry_spacing
-    }
-    pub fn prefix_size(&self, level: usize) -> usize {
-        level * (self.font_size as usize)
-    }
-}
 
 #[derive(Debug)]
 pub struct EntryList {
@@ -146,6 +67,7 @@ impl EntryList {
             .skip(self.screen_offset)
             .take(max_entries);
 
+        let font_data = self.config.font_data.get_font().unwrap();
         for (idx, (path, ent)) in to_draw {
             let display_idx = idx - self.screen_offset;
             let y = display_idx * self.config.entry_height() + borders.y;
@@ -166,7 +88,7 @@ impl EntryList {
             let mut text = Text::new(
                 (x, y),
                 fg,
-                &self.config.font_data,
+                font_data,
                 self.config.font_size,
                 1.0,
                 entry_name,
@@ -189,7 +111,7 @@ impl EntryList {
                 text = Text::new(
                     (x, y),
                     fg,
-                    &self.config.font_data,
+                    font_data,
                     self.config.font_size,
                     1.0,
                     entry_name,

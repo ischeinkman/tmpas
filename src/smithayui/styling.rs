@@ -14,16 +14,14 @@ use crate::model::{EntryPath, ListEntry};
 pub type Color = [u8; 4];
 
 pub struct WindowConfig {
-    pub dims : (u32, u32), 
+    pub dims: (u32, u32),
 }
 
 impl Default for WindowConfig {
     fn default() -> Self {
-        Self {
-            dims : (1024, 576)
-        }
+        Self { dims: (1024, 576) }
     }
-} 
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct FontConfig {
@@ -179,7 +177,7 @@ impl EntryListConfig {
 }
 
 impl SearchbarConfig {
-    pub fn label_text<'a>(&'a self) -> Text<'a> {
+    pub fn label_text(&self) -> Text<'_> {
         let x = self.padding;
         let y = self.padding + (self.inner_height() - self.label_size as usize) / 2;
 
@@ -199,11 +197,7 @@ impl SearchbarConfig {
         let h = self.buffer_rect_height();
         Rectangle::new((x, y), (w, h), None, Some(self.colors.buffer.bg))
     }
-    pub fn buffer_text<'a>(
-        &'a self,
-        label_width: usize,
-        buffer: &str,
-    ) -> Text {
+    pub fn buffer_text<'a>(&'a self, label_width: usize, buffer: &str) -> Text {
         let x = self.buffer_rect_x(label_width) + self.buffer_inner_padding;
         let y = self.padding + (self.inner_height() - self.buffer_size as usize) / 2;
 
@@ -256,7 +250,7 @@ impl FontConfig {
                     .map(Error::msg)
                     .or_else(|e| e.downcast::<&str>().map(Error::msg))
                     .unwrap_or_else(|_| Error::msg("Unknown panic occurred."))
-            }) 
+            })
             .with_context(|| {
                 format!(
                     "Error reading font path {} as font data.",

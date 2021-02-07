@@ -28,7 +28,7 @@ impl EntryList {
     pub fn set_results(&mut self, new_results: Vec<ListEntry>) {
         self.current_results = new_results;
         self.screen_offset = 0;
-        self.selection_position = 0;
+        self.selection_position = self.current_results.len().min(1);
     }
     pub fn max_entries(&self) -> usize {
         let max_height: usize = 1080;

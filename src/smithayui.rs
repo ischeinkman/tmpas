@@ -46,6 +46,7 @@ pub enum KeyAction {
     PageDown,
     Enter,
     Backspace,
+    Escape,
     Character(String),
 }
 
@@ -80,7 +81,7 @@ impl KeyAction {
             keysyms::XKB_KEY_BackSpace | keysyms::XKB_KEY_osfBackSpace => {
                 Some(KeyAction::Backspace)
             }
-
+            keysyms::XKB_KEY_Escape => Some(KeyAction::Escape),
             _ => None,
         }
     }
@@ -269,6 +270,9 @@ fn run_inner(mut state: State) -> Option<(State, ListEntry)> {
                 if let Some(selected) = resl.selected().cloned() {
                     return Some((state, selected));
                 }
+            }
+            else if action == KeyAction::Escape {
+                return None;
             }
             let action = match bar.push_action(action) {
                 ActionResponse::NeedsRedraw => {

@@ -43,13 +43,15 @@ impl LuaPlugin {
                 self.conf.file.display()
             )
         })?;
-        self.plugin_state().with_context(|| {
-            format!(
-                "Error in lua file plugin {} at {}: File is not a TMPAS plugin.",
-                name,
-                self.conf.file.display()
-            )
-        })?;
+        self.plugin_state()
+            .and_then(|state| state.verify())
+            .with_context(|| {
+                format!(
+                    "Error in lua file plugin {} at {}: File is not a TMPAS plugin.",
+                    name,
+                    self.conf.file.display()
+                )
+            })?;
         Ok(())
     }
 }
@@ -93,16 +95,16 @@ fn parse_lua_entry(args: LuaValue) -> mlua::Result<ListEntry> {
             });
         }
     };
-    let display_name: Option<String> = args.get("name")?;
-    let search_terms: Vec<String> = args.get("search_terms")?;
-    let exec_flags = args.get("exec_flags").and_then(parse_lua_exec_flags)?;
-    let raw_children: Option<Vec<LuaValue>> = args.get("children")?;
+    let display_name: Option<String> = args.raw_get("name")?;
+    let search_terms: Vec<String> = args.raw_get("search_terms")?;
+    let exec_flags = args.raw_get("exec_flags").and_then(parse_lua_exec_flags)?;
+    let raw_children: Option<Vec<LuaValue>> = args.raw_get("children")?;
     let children = raw_children
         .into_iter()
         .flat_map(|c| c.into_iter())
         .map(parse_lua_entry)
         .collect::<Result<Vec<_>, _>>()?;
-    let exec_command = parse_command_string(&(args.get::<_, String>("exec")?));
+    let exec_command = parse_command_string(&(args.raw_get::<_, String>("exec")?));
     Ok(ListEntry {
         display_name,
         exec_command,
@@ -314,15 +316,15 @@ impl<'a> LuaPluginState<'a> {
                 return Ok(());
             }
         };
-        inner.get::<_, Option<String>>("name")?;
-        let raw_entries: Option<Vec<LuaValue>> = inner.get("entries")?;
+        inner.raw_get::<_, Option<String>>("name")?;
+        let raw_entries: Option<Vec<LuaValue>> = inner.raw_get("entries")?;
         raw_entries
             .into_iter()
             .flat_map(|v| v.into_iter())
             .map(parse_lua_entry)
             .find(|res| res.is_err())
             .transpose()?;
-        inner.get::<_, Option<mlua::Function>>("next")?;
+        inner.raw_get::<_, Option<mlua::Function>>("next")?;
         Ok(())
     }
 }
@@ -341,7 +343,6 @@ impl<'lua> FromLua<'lua> for LuaPluginState<'lua> {
             }
         };
         let retvl = Self { inner };
-        retvl.verify()?;
         Ok(retvl)
     }
 }
